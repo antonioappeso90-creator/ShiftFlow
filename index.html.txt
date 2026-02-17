@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ShiftFlow Pro</title>
+    
+    <!-- PWA & Mobile Meta -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2370/2370264.png">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Scripts per far girare React e Firebase direttamente nel browser (CDN) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Firebase SDK Compat (Necessario per caricamento diretto via script) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: black; 
+            margin: 0; 
+            color: white; 
+            overflow: hidden; 
+            overscroll-behavior-y: contain;
+        }
+
+        #root { height: 100vh; width: 100vw; display: flex; flex-direction: column; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Effetti Animazione */
+        .animate-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .safe-area-inset {
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- CONFIGURAZIONE FIREBASE (Sostituita dinamicamente dall'ambiente o manuale) ---
+        const firebaseConfig = JSON.parse(__firebase_config);
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'shiftflow-github-pwa';
+
+        const { useState, useEffect, useCallback } = React;
+
+        // Icone inline SVG (Lucide-like) per evitare dipendenze esterne pesanti
+        const Icons = {
+            Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            Activity: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+            Download: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
+            Maximize: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>,
+            ChevronLeft: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
+            ChevronRight: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        };
+
+        const MONTHS = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+        const WEEKDAYS = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
+
+        const SHIFT_TYPES = {
+            MORNING: { label: 'M', full: 'Mattina', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+            AFTERNOON: { label: 'P', full: 'Pomeriggio', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+            OFF: { label: 'R', full: 'Riposo', color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' }
+        };
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [currentDate, setCurrentDate] = useState(new Date());
+            const [shifts, setShifts] = useState([]);
+            const [syncKey, setSyncKey] = useState(localStorage.getItem('sf_key') || '');
+            const [deferredPrompt, setDeferredPrompt] = useState(null);
+            const [notification, setNotification] = useState(null);
+
+            // Gestione Installazione PWA
+            useEffect(() => {
+                const handler = (e) => {
+                    e.preventDefault();
+                    setDeferredPrompt(e);
+                };
+                window.addEventListener('beforeinstallprompt', handler);
+                
+                // Registra Service Worker se su GitHub (HTTPS)
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('sw.js').catch(err => console.log("SW error", err));
+                }
+
+                return () => window.removeEventListener('beforeinstallprompt', handler);
+            }, []);
+
+            const installPWA = async () => {
+                if (!deferredPrompt) {
+                    setNotification("Usa il menu del browser > Installa");
+                    setTimeout(() => setNotification(null), 3000);
+                    return;
+                }
+                deferredPrompt.prompt();
+                setDeferredPrompt(null);
+            };
+
+            // Firebase Auth & Data
+            useEffect(() => {
+                const unsubAuth = auth.onAuthStateChanged(u => {
+                    if (!u) {
+                        if (typeof __initial_auth_token !== 'undefined') {
+                            auth.signInWithCustomToken(__initial_auth_token);
+                        } else {
+                            auth.signInAnonymously();
+                        }
+                    }
+                    setUser(u);
+                });
+                return () => unsubAuth();
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                const dataId = syncKey || user.uid;
+                const unsub = db.collection('artifacts').doc(appId).collection('public').doc('data')
+                    .collection(`shifts_${dataId}`)
+                    .onSnapshot(snap => {
+                        setShifts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    });
+                return () => unsub();
+            }, [user, syncKey]);
+
+            const setShift = async (dateStr, type) => {
+                if (!user) return;
+                const dataId = syncKey || user.uid;
+                await db.collection('artifacts').doc(appId).collection('public').doc('data')
+                    .collection(`shifts_${dataId}`).doc(dateStr).set({
+                        date: dateStr,
+                        shiftType: type,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+            };
+
+            const toggleFs = () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {
+                        setNotification("Modalità Standalone consigliata");
+                        setTimeout(() => setNotification(null), 3000);
+                    });
+                } else {
+                    document.exitFullscreen();
+                }
+            };
+
+            // Rendering Calendario
+            const renderDays = () => {
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+                const firstDay = new Date(year, month, 1).getDay();
+                const offset = firstDay === 0 ? 6 : firstDay - 1;
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                
+                const cells = [];
+                for (let i = 0; i < offset; i++) cells.push(<div key={`e-${i}`} className="h-28 border-b border-white/5 opacity-20" />);
+                
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const dateStr = `${year}-${(month+1).toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
+                    const shift = shifts.find(s => s.date === dateStr);
+                    const isToday = new Date().toISOString().split('T')[0] === dateStr;
+
+                    cells.push(
+                        <div key={d} 
+                             onClick={() => {
+                                 const next = shift ? (shift.shiftType === 'MORNING' ? 'AFTERNOON' : (shift.shiftType === 'AFTERNOON' ? 'OFF' : 'MORNING')) : 'MORNING';
+                                 setShift(dateStr, next);
+                             }}
+                             className={`h-28 border-b border-r border-white/5 p-2 flex flex-col transition-all active:bg-blue-500/20 ${isToday ? 'bg-blue-600/10' : ''}`}>
+                            <span className={`text-xs font-black ${isToday ? 'text-blue-400' : 'text-slate-500'}`}>{d}</span>
+                            <div className="flex-1 flex flex-col justify-center">
+                                {shift && (
+                                    <div className={`text-[10px] font-black p-1 rounded-lg border text-center uppercase tracking-tighter ${SHIFT_TYPES[shift.shiftType].color}`}>
+                                        {SHIFT_TYPES[shift.shiftType].label}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                }
+                return cells;
+            };
+
+            return (
+                <div className="flex flex-col h-full safe-area-inset bg-black animate-in">
+                    {/* Header */}
+                    <header className="p-6 flex justify-between items-center border-b border-white/5 bg-black/80 backdrop-blur-xl z-50">
+                        <div>
+                            <h1 className="text-3xl font-black italic uppercase tracking-tighter leading-none">
+                                {MONTHS[currentDate.getMonth()]}
+                            </h1>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">{currentDate.getFullYear()}</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1))} className="p-2 bg-white/5 rounded-xl border border-white/10"><Icons.ChevronLeft /></button>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1))} className="p-2 bg-white/5 rounded-xl border border-white/10"><Icons.ChevronRight /></button>
+                        </div>
+                    </header>
+
+                    {/* Griglia Giorni Settimana */}
+                    <div className="grid grid-cols-7 border-b border-white/5 bg-black">
+                        {WEEKDAYS.map(w => <div key={w} className="py-2 text-center text-[8px] font-black text-slate-600 tracking-widest">{w}</div>)}
+                    </div>
+
+                    {/* Calendario Scroller */}
+                    <div className="flex-1 overflow-y-auto no-scrollbar grid grid-cols-7 pb-20">
+                        {renderDays()}
+                    </div>
+
+                    {/* Footer Nav */}
+                    <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-white/10 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-4 flex justify-around items-center shadow-2xl z-50">
+                        <button onClick={toggleFs} className="p-3 text-slate-400 hover:text-white transition-colors"><Icons.Maximize /></button>
+                        <div className="h-10 w-10 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/30">
+                            <Icons.Activity />
+                        </div>
+                        <button onClick={installPWA} className={`p-3 transition-colors ${deferredPrompt ? 'text-blue-400 animate-pulse' : 'text-slate-400'}`}>
+                            <Icons.Download />
+                        </button>
+                    </nav>
+
+                    {notification && (
+                        <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest shadow-2xl animate-in z-[100]">
+                            {notification}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
